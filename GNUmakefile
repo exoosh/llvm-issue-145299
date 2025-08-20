@@ -1,16 +1,15 @@
-CC=clang
 CXX=clang++
-SOURCES:=prog.c lib.cpp
+SOURCES:=prog.cpp lib.cpp
 PROG:=prog
 DSO:=libfoo.so
 # Figure out sanitizer runtime library path (dodge #145326)
-TGTTRIPLE:=$(shell $(CC) -print-target-triple)
-SANRT_LIBDIR:=$(patsubst %/$(TGTTRIPLE),%/linux,$(shell $(CC) -print-runtime-dir))
-LDFLAGS+=-Wl,-rpath,"$$ORIGIN:$(SANRT_LIBDIR)"
+TGTTRIPLE:=$(shell $(CXX) -print-target-triple)
+SANRT_LIBDIR:=$(patsubst %/$(TGTTRIPLE),%/linux,$(shell $(CXX) -print-runtime-dir))
+LDFLAGS+=-Wl,-rpath,"\$$ORIGIN:$(SANRT_LIBDIR)" -Wl,--no-allow-shlib-undefined -Wl,--no-whole-archive
 # Sanitizer builds
 LDFLAGS+=-fuse-ld=lld -shared-libsan -fsanitize=address,undefined
 # Little cheat to get these for both C and C++
-CPPFLAGS+=-fPIC -O1 -g3 -ggdb -fsanitize=address,undefined
+CPPFLAGS+=-fPIC -O0 -g3 -ggdb -fsanitize=address,undefined -fvisibility=hidden
 CXXFLAGS+=-stdlib=libc++ -nostdlib++
 
 # "stolen" from GNU make snippet I contributed to AFL++
@@ -26,13 +25,14 @@ all: $(PROG) $(DSO)
 debug: $(PROG) $(DSO)
 	env ASAN_OPTIONS=detect_leaks=0 gdb --args $(realpath $(PROG)) $(realpath $(DSO))
 
-$(PROG): prog.o
+$(PROG): prog.cpp
+	$(LINK.cpp) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 $(DSO): lib.cpp
 	$(LINK.cpp) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
-$(DSO): LDFLAGS+=-l:libc++.a  -l:libc++abi.a -fPIC -shared
-#-fvisibility=hidden
+$(DSO): LDFLAGS+=-fPIC -shared
+$(DSO): LDLIBS+=-l:libc++.a -l:libc++abi.a
 
 pretty:
 	$(CLANG_FORMAT) -i $(SOURCES)

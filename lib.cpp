@@ -30,7 +30,16 @@ extern "C" __attribute__((visibility("default"))) const char* get_executable_nam
 {
     if (hold_args.size())
     {
-        return hold_args[1].c_str();
+        return hold_args[0].c_str();
     }
     return "/proc/self/exe";
+}
+
+extern "C" __attribute__((visibility("default"))) const char* get_arg(size_t idx)
+{
+    if (hold_args.size() && (idx > 0) && (idx < hold_args.size()))
+    {
+        return hold_args[idx].c_str();
+    }
+	return nullptr;
 }
