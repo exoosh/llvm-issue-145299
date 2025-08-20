@@ -1,50 +1,39 @@
-#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+struct Base
+{
+    virtual ~Base() = default;
+    virtual void foo()
+    {
+        printf("libfoo: inside Base::foo\n");
+    }
+};
+
+struct Derived : Base
+{
+    int value;
+};
+
+extern "C" bool vptr_check()
+{
+    auto* d = new Derived();
+    d->value = 42;
+    printf("libfoo: created Derived at %p\n", d);
+    Base* b = dynamic_cast<Base*>(d);
+    b->foo(); // let's hope for UBSan's vptr to instrument this ...
+    printf("libfoo: Base::foo virtual call completed with Base at %p\n", b);
+    return true;
+}
+
 int main(int argc, char** argv)
 {
-    if (argc <= 1)
+    printf("calling vptr_check()\n");
+    if (!vptr_check())
     {
-        fprintf(stderr, "No DSO paths given, give at least one\n");
+        printf("vptr_check() failed\n");
         return EXIT_FAILURE;
     }
-    for (int i = 1; i < argc; i++)
-    {
-        void* dso = dlopen(argv[i], RTLD_NOW);
-        if (!dso)
-        {
-            fprintf(stderr, "dlopen(\"%s\", RTLD_NOW) failed: %s\n", argv[i], dlerror());
-            return EXIT_FAILURE;
-        }
-        static const char* (*pfn_get_executable_name)() = nullptr;
-        static const char* (*pfn_get_arg)(size_t) = nullptr;
-        if (!pfn_get_executable_name)
-        {
-            pfn_get_executable_name = (decltype(pfn_get_executable_name))dlsym(dso, "get_executable_name");
-            if (!pfn_get_executable_name)
-            {
-                fprintf(stderr, "dlsym(\"%s\") -> failed: %p: %s\n", "get_executable_name", pfn_get_executable_name, dlerror());
-                dlclose(dso);
-                return EXIT_FAILURE;
-            }
-            printf("Executable name: %s\n", pfn_get_executable_name());
-        }
-        if (!pfn_get_arg)
-        {
-            pfn_get_arg = (decltype(pfn_get_arg))dlsym(dso, "get_arg");
-            if (!pfn_get_arg)
-            {
-                fprintf(stderr, "dlsym(\"%s\") -> failed: %p: %s\n", "get_arg", pfn_get_arg, dlerror());
-                dlclose(dso);
-                return EXIT_FAILURE;
-            }
-            printf("Argument 1: %s\n", pfn_get_arg(1));
-        }
-        dlclose(dso);
-    }
-    int x = -1;
-    int y = x << 1;
-    printf("%d ... UBSan should have triggered on the previous line\n", y);
+    printf("vptr_check() succeeded\n");
     return EXIT_SUCCESS;
 }
